@@ -18,6 +18,9 @@ class Settings:
     SMTP_USERNAME: str = os.getenv("SMTP_USERNAME")
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD")
     EMAIL_FROM:str = os.getenv("EMAIL_FROM")
+    CLOUD_NAME: str = os.getenv("CLOUD_NAME")
+    API_KEY: str = os.getenv("API_KEY")
+    API_SECRET: str = os.getenv("API_SECRET")
 
 settings = Settings()
 

@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.sql import func
 from app.database import Base
+from sqlalchemy.orm import relationship
 
 class User(Base):
     __tablename__ = "users"
@@ -16,6 +17,24 @@ class User(Base):
     otp = Column(String(6), nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=True)
     is_used = Column(Boolean, default=False)
+
+    posts = relationship(
+        "Post",
+        back_populates="author",
+        cascade="all, delete"
+    )
+
+    comments = relationship(
+        "Comment",
+        back_populates="author",
+        cascade="all, delete-orphan"
+    )
+
+    likes = relationship(
+        "Like",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

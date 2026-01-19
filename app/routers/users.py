@@ -162,7 +162,7 @@ def forgot_password(
     data: ForgotPassword,
     db: Annotated[Session, Depends(get_db)]
 ):
-    """Send password reset link to user's email"""
+
     user = db.query(User).filter(User.email == data.email).first()
     
     if not user:
@@ -177,10 +177,8 @@ def forgot_password(
             detail="Please verify your email first"
         )
     
-    # Generate password reset token
     reset_token = create_password_reset_token(user.email)
-    
-    # Send password reset email
+
     send_password_reset_email(user.email, reset_token)
     
     return {
@@ -194,8 +192,7 @@ def reset_password(
     data: ResetPassword,
     db: Annotated[Session, Depends(get_db)]
 ):
-    """Reset password using the token from email link"""
-    # Verify the token and get email
+   
     email = verify_password_reset_token(data.token)
     
     if not email:
@@ -203,8 +200,7 @@ def reset_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired reset token"
         )
-    
-    # Find user by email
+
     user = db.query(User).filter(User.email == email).first()
     
     if not user:
@@ -212,8 +208,7 @@ def reset_password(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
-    
-    # Update password
+
     user.hashed_password = get_password_hash(data.new_password)
     db.commit()
     db.refresh(user)
