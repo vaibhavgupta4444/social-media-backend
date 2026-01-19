@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from datetime import datetime, timedelta
 from jose import jwt
 from app.core.config import settings
+import random
 
 
 def get_password_hash(password: str) -> str:
@@ -66,5 +67,31 @@ def decode_access_token(token: str):
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         return payload
+    except Exception:
+        return None
+    
+
+def generate_otp(length: int = 6) -> str:
+    return "".join(str(random.randint(0, 9)) for _ in range(length))
+
+
+def create_password_reset_token(email: str) -> str:
+    """Create a password reset token valid for 15 minutes"""
+    expires_delta = timedelta(minutes=15)
+    return _create_token(
+        data={"sub": email},
+        expires_delta=expires_delta,
+        token_type="password_reset"
+    )
+
+
+def verify_password_reset_token(token: str) -> str | None:
+    """Verify password reset token and return email if valid"""
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("type") != "password_reset":
+            return None
+        email: str = payload.get("sub")
+        return email
     except Exception:
         return None

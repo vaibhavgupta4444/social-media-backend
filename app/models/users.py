@@ -13,5 +13,9 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
 
+    otp = Column(String(6), nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    is_used = Column(Boolean, default=False)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

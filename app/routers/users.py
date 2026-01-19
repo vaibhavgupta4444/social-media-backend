@@ -1,11 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from app.schemas import UserCreate, UserResponse, ChangePassword
+from app.schemas import UserCreate, UserResponse, ChangePassword, VerifyOTP, ForgotPassword, ResetPassword
 from sqlalchemy.orm import Session
 from app.dependencies import get_db, get_current_user
 from app.models import User
-from app.core import get_password_hash, verify_password, create_tokens
+from app.core import (
+    get_password_hash, 
+    verify_password, 
+    create_tokens, 
+    send_otp_email,
+    generate_otp,
+    create_password_reset_token,
+    verify_password_reset_token,
+    send_password_reset_email
+)
 from fastapi.security import OAuth2PasswordRequestForm
 from typing import Annotated
+from datetime import datetime, timedelta, timezone
 
 router = APIRouter(
     prefix="/users",
@@ -17,23 +27,36 @@ def create_user(user: UserCreate,
                 db:Annotated[Session ,Depends(get_db)]):
     is_user_exist = db.query(User).filter(User.email == user.email).first()
 
-    if is_user_exist:
+    if is_user_exist and is_user_exist.is_verified:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="User exists")
+                            detail="User already exists and is verified")
     
-    # if not is_user_exist.is_verified:
-    #     raise 
+    otp = generate_otp()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
 
-    hashed_password = get_password_hash(user.password)
-    user_data = user.model_dump()
-    user_data.pop("password")    
-    new_user = User(**user_data, hashed_password = hashed_password)
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    if not is_user_exist:
+        # Create new user
+        hashed_password = get_password_hash(user.password)
+        user_data = user.model_dump()
+        user_data.pop("password")    
+        new_user = User(**user_data, hashed_password = hashed_password,
+                        otp = otp, expires_at = expires_at, is_used = False)
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+    else:
+        is_user_exist.username = user.username
+        is_user_exist.hashed_password = get_password_hash(user.password)
+        is_user_exist.otp = otp
+        is_user_exist.expires_at = expires_at
+        is_user_exist.is_used = False
+        db.commit()
+        db.refresh(is_user_exist)
+
+    send_otp_email(user.email, otp)
     return {
         "success": True,
-        "Message": "User created Successfully"
+        "message": "OTP sent to your email"
     }
 
 @router.post("/login", response_model=UserResponse)
@@ -45,6 +68,10 @@ def login(form_data: Annotated[OAuth2PasswordRequestForm , Depends()],
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail="User not exists")
+
+    if not user.is_verified:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Please verify your email first")
 
     if not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
@@ -79,6 +106,9 @@ def change_password(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
+    if not user.is_verified:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Please verify your email first")
+
     if not verify_password(hashed_password=user.hashed_password,plain_password= data.current_password):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect Password")
 
@@ -88,3 +118,107 @@ def change_password(
 
     return {"success": True, "message": "Password Changed Successfully"}
 
+
+@router.post("/verify-otp", response_model=UserResponse)
+def verify_otp(
+    data: VerifyOTP,
+    db: Annotated[Session, Depends(get_db)]
+):
+    user = db.query(User).filter(
+        User.email == data.email,
+        User.otp == data.otp,
+        User.is_used == False
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OTP or OTP already used"
+        )
+
+  
+    if user.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OTP has expired. Please request a new one."
+        )
+
+    user.is_used = True
+    user.is_verified = True
+    user.otp = None
+    db.commit()
+    db.refresh(user)
+
+    
+    tokens = create_tokens(data={"sub": str(user.id)})
+    return {
+        "access_token": tokens["access_token"],
+        "refresh_token": tokens["refresh_token"]
+    }
+
+
+@router.post("/forgot-password")
+def forgot_password(
+    data: ForgotPassword,
+    db: Annotated[Session, Depends(get_db)]
+):
+    """Send password reset link to user's email"""
+    user = db.query(User).filter(User.email == data.email).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User with this email does not exist"
+        )
+    
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email first"
+        )
+    
+    # Generate password reset token
+    reset_token = create_password_reset_token(user.email)
+    
+    # Send password reset email
+    send_password_reset_email(user.email, reset_token)
+    
+    return {
+        "success": True,
+        "message": "Password reset link sent to your email"
+    }
+
+
+@router.post("/reset-password")
+def reset_password(
+    data: ResetPassword,
+    db: Annotated[Session, Depends(get_db)]
+):
+    """Reset password using the token from email link"""
+    # Verify the token and get email
+    email = verify_password_reset_token(data.token)
+    
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+    
+    # Find user by email
+    user = db.query(User).filter(User.email == email).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Update password
+    user.hashed_password = get_password_hash(data.new_password)
+    db.commit()
+    db.refresh(user)
+    
+    return {
+        "success": True,
+        "message": "Password reset successfully"
+    }

@@ -12,3 +12,14 @@ class UserResponse(BaseModel):
 class ChangePassword(BaseModel):
     current_password: str
     new_password: str
+
+class VerifyOTP(BaseModel):
+    email: EmailStr
+    otp: str
+
+class ForgotPassword(BaseModel):
+    email: EmailStr
+
+class ResetPassword(BaseModel):
+    token: str
+    new_password: str

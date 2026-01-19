@@ -13,6 +13,11 @@ class Settings:
     REFRESH_TOKEN_EXPIRE_DAYS: int = int(
         os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 7)
     )
+    SMTP_HOST:str= os.getenv("SMTP_HOST")
+    SMTP_PORT: int = os.getenv("SMTP_PORT")
+    SMTP_USERNAME: str = os.getenv("SMTP_USERNAME")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD")
+    EMAIL_FROM:str = os.getenv("EMAIL_FROM")
 
 settings = Settings()
 
