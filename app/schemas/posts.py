@@ -23,7 +23,7 @@ class PostResponse(BaseModel):
     likes_count: int
     created_at: datetime
 
-    author_id: int
+    author_username: str
 
     class Config:
         from_attributes = True

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from app.models import Post, Like, User
+from app.models import Post, Like, User, Notification, NotificationType
 from app.dependencies import get_current_user, get_db
 from typing import Annotated
 
@@ -56,6 +56,17 @@ def like_post(
     db.add(new_like)
     db.commit()
     db.refresh(post)
+    
+    # Create notification for post owner (only if not liking own post)
+    if post.user_id != user_id:
+        notification = Notification(
+            user_id=post.user_id,
+            actor_id=user_id,
+            type=NotificationType.LIKE,
+            post_id=post_id
+        )
+        db.add(notification)
+        db.commit()
     
     return {
         "success": True,

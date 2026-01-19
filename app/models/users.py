@@ -36,5 +36,24 @@ class User(Base):
         cascade="all, delete-orphan"
     )
 
+    followers = relationship(
+        "Follow",
+        foreign_keys="Follow.following_id",
+        cascade="all, delete"
+    )
+
+    following = relationship(
+        "Follow",
+        foreign_keys="Follow.follower_id",
+        cascade="all, delete"
+    )
+
+    notifications = relationship(
+        "Notification",
+        foreign_keys="Notification.user_id",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

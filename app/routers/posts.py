@@ -69,7 +69,7 @@ async def create_post(
         is_private=post.is_private,
         likes_count=post.likes_count,
         created_at=post.created_at,
-        author_id=post.user_id
+        author_username=user.username
     )
 
 
@@ -81,7 +81,7 @@ def get_posts(
     current_user = Depends(get_current_user)
 ):
     user_id = int(current_user['sub'])
-    query = db.query(Post).filter(
+    query = db.query(Post, User).join(User, Post.user_id == User.id).filter(
         (Post.is_private == False) | (Post.user_id == user_id)
     )
     
@@ -89,7 +89,7 @@ def get_posts(
     total = query.count()
     total_pages = math.ceil(total / page_size)
     offset = (page - 1) * page_size
-    posts = query.order_by(Post.created_at.desc()).offset(offset).limit(page_size).all()
+    results = query.order_by(Post.created_at.desc()).offset(offset).limit(page_size).all()
     
     return PostListResponse(
         posts=[PostResponse(
@@ -99,8 +99,8 @@ def get_posts(
             is_private=post.is_private,
             likes_count=post.likes_count,
             created_at=post.created_at,
-            author_id=post.user_id
-        ) for post in posts],
+            author_username=user.username
+        ) for post, user in results],
         total=total,
         page=page,
         page_size=page_size,
@@ -117,13 +117,15 @@ def get_post(
 
     user_id = int(current_user['sub'])
     
-    post = db.query(Post).filter(Post.id == post_id).first()
+    result = db.query(Post, User).join(User, Post.user_id == User.id).filter(Post.id == post_id).first()
     
-    if not post:
+    if not result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found"
         )
+    
+    post, author = result
 
     if post.is_private and post.user_id != user_id:
         raise HTTPException(
@@ -138,7 +140,7 @@ def get_post(
         is_private=post.is_private,
         likes_count=post.likes_count,
         created_at=post.created_at,
-        author_id=post.user_id
+        author_username=author.username
     )
 
 
