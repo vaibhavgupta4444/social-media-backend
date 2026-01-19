@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.models import Post, User
 from app.schemas import PostResponse, PostListResponse, PostUpdate
 from app.core import upload_to_cloudinary
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_verified_user, get_current_user, get_db
 from typing import Optional
 import math
 
@@ -18,24 +18,8 @@ async def create_post(
     media: UploadFile = File(None),
     is_private: bool = Form(False),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    user: User = Depends(get_verified_user)
 ):
-    user_id = int(current_user['sub'])
-    
-    # Check if user exists and is verified
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email first"
-        )
-
     if not content and not media:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -53,7 +37,7 @@ async def create_post(
             )
 
     post = Post(
-        user_id=int(current_user['sub']),
+        user_id=user.id,
         content=content,
         media_url=media_url,
         is_private=is_private
@@ -78,11 +62,10 @@ def get_posts(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    user: User = Depends(get_verified_user)
 ):
-    user_id = int(current_user['sub'])
     query = db.query(Post, User).join(User, Post.user_id == User.id).filter(
-        (Post.is_private == False) | (Post.user_id == user_id)
+        (Post.is_private == False) | (Post.user_id == user.id)
     )
     
 
@@ -112,11 +95,8 @@ def get_posts(
 def get_post(
     post_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    user: User = Depends(get_verified_user)
 ):
-
-    user_id = int(current_user['sub'])
-    
     result = db.query(Post, User).join(User, Post.user_id == User.id).filter(Post.id == post_id).first()
     
     if not result:
@@ -127,7 +107,7 @@ def get_post(
     
     post, author = result
 
-    if post.is_private and post.user_id != user_id:
+    if post.is_private and post.user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to view this post"
@@ -151,25 +131,8 @@ async def update_post(
     media: Optional[UploadFile] = File(None),
     is_private: Optional[bool] = Form(None),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    user: User = Depends(get_verified_user)
 ):
- 
-    user_id = int(current_user['sub'])
-    
-    # Check if user exists and is verified
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email first"
-        )
-    
     post = db.query(Post).filter(Post.id == post_id).first()
     
     if not post:
@@ -178,7 +141,7 @@ async def update_post(
             detail="Post not found"
         )
     
-    if post.user_id != user_id:
+    if post.user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only update your own posts"
@@ -219,25 +182,8 @@ async def update_post(
 def delete_post(
     post_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    user: User = Depends(get_verified_user)
 ):
-
-    user_id = int(current_user['sub'])
-    
-    # Check if user exists and is verified
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email first"
-        )
-    
     post = db.query(Post).filter(Post.id == post_id).first()
     
     if not post:
@@ -247,7 +193,7 @@ def delete_post(
         )
     
   
-    if post.user_id != user_id:
+    if post.user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only delete your own posts"

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.models import Post, Like, User, Notification, NotificationType
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_verified_user, get_db
 from typing import Annotated
 
 
@@ -15,24 +15,8 @@ router = APIRouter(
 def like_post(
     post_id: int,
     db: Annotated[Session, Depends(get_db)],
-    current_user = Depends(get_current_user)
+    user: User = Depends(get_verified_user)
 ):
-  
-    user_id = int(current_user['sub'])
- 
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email first"
-        )
-    
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(
@@ -42,7 +26,7 @@ def like_post(
     
     existing_like = db.query(Like).filter(
         Like.post_id == post_id,
-        Like.user_id == user_id
+        Like.user_id == user.id
     ).first()
     
     if existing_like:
@@ -50,7 +34,7 @@ def like_post(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You already liked this post"
         )
-    new_like = Like(post_id=post_id, user_id=user_id)
+    new_like = Like(post_id=post_id, user_id=user.id)
     post.likes_count += 1
     
     db.add(new_like)
@@ -58,10 +42,10 @@ def like_post(
     db.refresh(post)
     
     # Create notification for post owner (only if not liking own post)
-    if post.user_id != user_id:
+    if post.user_id != user.id:
         notification = Notification(
             user_id=post.user_id,
-            actor_id=user_id,
+            actor_id=user.id,
             type=NotificationType.LIKE,
             post_id=post_id
         )
@@ -79,23 +63,8 @@ def like_post(
 def unlike_post(
     post_id: int,
     db: Annotated[Session, Depends(get_db)],
-    current_user = Depends(get_current_user)
+    user: User = Depends(get_verified_user)
 ):
-
-    user_id = int(current_user['sub'])
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-
-    if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email first"
-        )
-
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(
@@ -105,7 +74,7 @@ def unlike_post(
     
     existing_like = db.query(Like).filter(
         Like.post_id == post_id,
-        Like.user_id == user_id
+        Like.user_id == user.id
     ).first()
     
     if not existing_like:

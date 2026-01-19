@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import Annotated
 from sqlalchemy.orm import Session
-from app.dependencies import get_db, get_current_user
+from app.dependencies import get_db, get_verified_user
 from app.models import Post, User, Comment, Notification, NotificationType
 from app.schemas import CommentResponse, CommentListResponse
 import math
@@ -16,37 +16,24 @@ def create_comment(
     post_id: str,
     content: str,
     db: Annotated[Session, Depends(get_db)],
-    current_user = Depends(get_current_user)
+    user: User = Depends(get_verified_user)
 ):
-    user_id = int(current_user['sub'])
-
     post = db.query(Post).filter(Post.id == post_id).first()
 
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
-
-    user = db.query(User).filter(User.id == user_id).first()
-
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     
-    if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email first"
-        )
-    
-    new_comment = Comment(post_id = post_id, user_id = user_id, content = content)
+    new_comment = Comment(post_id = post_id, user_id = user.id, content = content)
 
     db.add(new_comment)
     db.commit()
     db.refresh(new_comment)
 
     # Create notification for post owner (only if not commenting on own post)
-    if post.user_id != user_id:
+    if post.user_id != user.id:
         notification = Notification(
             user_id=post.user_id,
-            actor_id=user_id,
+            actor_id=user.id,
             type=NotificationType.COMMENT,
             post_id=post_id,
             comment_id=new_comment.id
@@ -110,30 +97,17 @@ def update_comment(
     post_id: str,
     content: str,
     db: Annotated[Session, Depends(get_db)],
-    current_user = Depends(get_current_user)
+    user: User = Depends(get_verified_user)
 ):
-    user_id = int(current_user['sub'])
-
     post = db.query(Post).filter(Post.id == post_id).first()
 
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
-
-    user = db.query(User).filter(User.id == user_id).first()
-
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    
-    if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email first"
-        )
     
     comment = db.query(Comment).filter(
         Comment.id == id,
         Comment.post_id == post_id,
-        Comment.user_id == user_id
+        Comment.user_id == user.id
     ).first()
 
     if not comment:
@@ -158,30 +132,17 @@ def delete_comment(
     id: int,
     post_id: int,
     db: Annotated[Session, Depends(get_db)],
-    current_user = Depends(get_current_user)
+    user: User = Depends(get_verified_user)
 ):
-    user_id = int(current_user['sub'])
-
     post = db.query(Post).filter(Post.id == post_id).first()
 
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
-
-    user = db.query(User).filter(User.id == user_id).first()
-
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    
-    if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email first"
-        )
     
     comment = db.query(Comment).filter(
         Comment.id == id,
         Comment.post_id == post_id,
-        Comment.user_id == user_id
+        Comment.user_id == user.id
     ).first()
 
     if not comment:

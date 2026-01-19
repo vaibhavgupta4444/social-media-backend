@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from app.models import Notification, NotificationType, User
 from app.schemas import NotificationResponse, NotificationListResponse
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_verified_user, get_db
 from typing import Annotated
 import math
 
@@ -29,34 +29,18 @@ def get_notifications(
     page_size: int = Query(10, ge=1, le=100),
     unread_only: bool = Query(False, description="Show only unread notifications"),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    user: User = Depends(get_verified_user)
 ):
-    user_id = int(current_user['sub'])
-    
-    # Check if user exists and is verified
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email first"
-        )
-    
     query = db.query(Notification, User).join(
         User, Notification.actor_id == User.id
-    ).filter(Notification.user_id == user_id)
+    ).filter(Notification.user_id == user.id)
     
     if unread_only:
         query = query.filter(Notification.is_read == False)
     total = query.count()
 
     unread_count = db.query(Notification).filter(
-        Notification.user_id == user_id,
+        Notification.user_id == user.id,
         Notification.is_read == False
     ).count()
     
@@ -93,27 +77,11 @@ def get_notifications(
 def mark_notification_as_read(
     notification_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    user: User = Depends(get_verified_user)
 ):
-    user_id = int(current_user['sub'])
-    
-    # Check if user exists and is verified
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email first"
-        )
-    
     notification = db.query(Notification).filter(
         Notification.id == notification_id,
-        Notification.user_id == user_id
+        Notification.user_id == user.id
     ).first()
     
     if not notification:
@@ -131,26 +99,10 @@ def mark_notification_as_read(
 @router.put("/read-all")
 def mark_all_notifications_as_read(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    user: User = Depends(get_verified_user)
 ):
-    user_id = int(current_user['sub'])
-    
-    # Check if user exists and is verified
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email first"
-        )
-    
     db.query(Notification).filter(
-        Notification.user_id == user_id,
+        Notification.user_id == user.id,
         Notification.is_read == False
     ).update({"is_read": True})
     
@@ -163,27 +115,11 @@ def mark_all_notifications_as_read(
 def delete_notification(
     notification_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    user: User = Depends(get_verified_user)
 ):
-    user_id = int(current_user['sub'])
-    
-    # Check if user exists and is verified
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email first"
-        )
-    
     notification = db.query(Notification).filter(
         Notification.id == notification_id,
-        Notification.user_id == user_id
+        Notification.user_id == user.id
     ).first()
     
     if not notification:

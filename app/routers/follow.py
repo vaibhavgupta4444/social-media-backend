@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.models.follow import Follow
 from app.models import User, Notification, NotificationType
-from app.dependencies.auth import get_current_user, get_db
+from app.dependencies.auth import get_verified_user, get_db
 from app.schemas import FollowerResponse, FollowerListResponse, FollowingResponse, FollowingListResponse
 from typing import Annotated
 
@@ -12,15 +12,9 @@ router = APIRouter(prefix="/users", tags=["Follow"])
 def follow_user(
     user_id: int,
     db: Annotated[Session, Depends(get_db)],
-    current_user=Depends(get_current_user)
+    current_user: User = Depends(get_verified_user)
 ):
-    current_user_id = int(current_user['sub'])
-    
-    current_user_exists = db.query(User).filter(User.id == current_user_id, User.is_verified == True).first()
-    if not current_user_exists:
-        raise HTTPException(status_code=404, detail="Current user not found")
-    
-    if user_id == current_user_id:
+    if user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot follow yourself"
@@ -31,7 +25,7 @@ def follow_user(
         raise HTTPException(status_code=404, detail="User not found")
 
     already_following = db.query(Follow).filter(
-        Follow.follower_id == current_user_id,
+        Follow.follower_id == current_user.id,
         Follow.following_id == user_id
     ).first()
 
@@ -42,7 +36,7 @@ def follow_user(
         )
 
     follow = Follow(
-        follower_id=current_user_id,
+        follower_id=current_user.id,
         following_id=user_id
     )
 
@@ -52,7 +46,7 @@ def follow_user(
     # Create notification for the followed user
     notification = Notification(
         user_id=user_id,
-        actor_id=current_user_id,
+        actor_id=current_user.id,
         type=NotificationType.FOLLOW
     )
     db.add(notification)
@@ -64,21 +58,14 @@ def follow_user(
 def unfollow_user(
     user_id: int,
     db: Annotated[Session, Depends(get_db)],
-    current_user=Depends(get_current_user)
+    current_user: User = Depends(get_verified_user)
 ):
-    current_user_id = int(current_user['sub'])
-    
-
-    current_user_exists = db.query(User).filter(User.id == current_user_id, User.is_verified == True).first()
-    if not current_user_exists:
-        raise HTTPException(status_code=404, detail="Current user not found")
-
     target_user = db.query(User).filter(User.id == user_id, User.is_verified == True).first()
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
     
     follow = db.query(Follow).filter(
-        Follow.follower_id == current_user_id,
+        Follow.follower_id == current_user.id,
         Follow.following_id == user_id
     ).first()
 

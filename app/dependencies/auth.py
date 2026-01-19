@@ -24,3 +24,27 @@ def get_current_user(credentials: Annotated[HTTPAuthorizationCredentials , Depen
     if not decode_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     return decode_token
+
+
+def get_verified_user(
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    from app.models import User
+    
+    user_id = int(current_user['sub'])
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email first"
+        )
+    
+    return user
