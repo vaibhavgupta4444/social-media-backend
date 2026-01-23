@@ -21,6 +21,9 @@ class Settings:
     CLOUD_NAME: str = os.getenv("CLOUD_NAME")
     API_KEY: str = os.getenv("API_KEY")
     API_SECRET: str = os.getenv("API_SECRET")
+    VAPID_PUBLIC_KEY: str = os.getenv("VAPID_PUBLIC_KEY")
+    VAPID_PRIVATE_KEY: str = os.getenv("VAPID_PRIVATE_KEY")
+    VAPID_SUBJECT: str = os.getenv("VAPID_SUBJECT", "mailto:admin@example.com")
 
 settings = Settings()
 

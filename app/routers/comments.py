@@ -1,20 +1,25 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import Annotated
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.dependencies import get_db, get_verified_user
 from app.models import Post, User, Comment, Notification, NotificationType
 from app.schemas import CommentResponse, CommentListResponse
 import math
+from app.core.notification_helper import create_and_emit_notification_sync
 
 router = APIRouter(
     prefix="/posts",
     tags=["comment"]
 )
 
+class CommentCreate(BaseModel):
+    content: str
+
 @router.post("/{post_id}/comment", response_model=CommentResponse)
 def create_comment(
     post_id: str,
-    content: str,
+    content_data: CommentCreate,
     db: Annotated[Session, Depends(get_db)],
     user: User = Depends(get_verified_user)
 ):
@@ -23,23 +28,22 @@ def create_comment(
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
     
-    new_comment = Comment(post_id = post_id, user_id = user.id, content = content)
+    new_comment = Comment(post_id = post_id, user_id = user.id, content = content_data.content)
 
     db.add(new_comment)
     db.commit()
     db.refresh(new_comment)
 
-    # Create notification for post owner (only if not commenting on own post)
+    # Create notification for post owner (only if not commenting on own post) and emit via Socket.IO
     if post.user_id != user.id:
-        notification = Notification(
+        create_and_emit_notification_sync(
+            db=db,
             user_id=post.user_id,
             actor_id=user.id,
-            type=NotificationType.COMMENT,
+            notification_type=NotificationType.COMMENT,
             post_id=post_id,
             comment_id=new_comment.id
         )
-        db.add(notification)
-        db.commit()
 
     return CommentResponse(
         id=new_comment.id,

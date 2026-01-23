@@ -41,16 +41,16 @@ def like_post(
     db.commit()
     db.refresh(post)
     
-    # Create notification for post owner (only if not liking own post)
+    # Create notification for post owner (only if not liking own post) and emit via Socket.IO
     if post.user_id != user.id:
-        notification = Notification(
+        from app.core.notification_helper import create_and_emit_notification_sync
+        create_and_emit_notification_sync(
+            db=db,
             user_id=post.user_id,
             actor_id=user.id,
-            type=NotificationType.LIKE,
+            notification_type=NotificationType.LIKE,
             post_id=post_id
         )
-        db.add(notification)
-        db.commit()
     
     return {
         "success": True,

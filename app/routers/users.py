@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.schemas import UserCreate, UserResponse, ChangePassword, VerifyOTP, ForgotPassword, ResetPassword
 from sqlalchemy.orm import Session
 from app.dependencies import get_db, get_current_user, get_verified_user
-from app.models import User
+from app.models import User, Post, Follow
 from app.core import (
     get_password_hash, 
     verify_password, 
@@ -21,6 +21,44 @@ router = APIRouter(
     prefix="/users",
     tags=["users"]
 )
+
+@router.get("/me")
+def get_user(
+    db: Annotated[Session, Depends(get_db)],
+    user: User = Depends(get_verified_user)):
+    
+    # Get posts count
+    posts_count = db.query(Post).filter(Post.user_id == user.id).count()
+    
+    # Get followers list
+    followers = db.query(Follow).filter(Follow.following_id == user.id).all()
+    followers_list = [
+        {
+            "id": follower.follower_id,
+            "username": db.query(User).filter(User.id == follower.follower_id).first().username
+        }
+        for follower in followers
+    ]
+    
+    # Get following list
+    following = db.query(Follow).filter(Follow.follower_id == user.id).all()
+    following_list = [
+        {
+            "id": follow.following_id,
+            "username": db.query(User).filter(User.id == follow.following_id).first().username
+        }
+        for follow in following
+    ]
+    
+    return {
+        "success": True,
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "posts_count": posts_count,
+        "followers": followers_list,
+        "following": following_list
+    }
 
 @router.post("/register")
 def create_user(user: UserCreate,

@@ -39,13 +39,15 @@ A comprehensive FastAPI-based social media backend with user authentication, pos
 - Notifications on new followers
 
 ### 🔔 Notifications
-- Real-time notifications for:
+- **Real-time notifications via Socket.IO** for:
   - New followers
   - Post likes
   - Post comments
 - Mark notifications as read (single or all)
 - Delete notifications
 - Pagination and unread filter
+- WebSocket connections with JWT authentication
+- Live notification delivery to connected users
 
 ## Tech Stack
 
@@ -58,6 +60,7 @@ A comprehensive FastAPI-based social media backend with user authentication, pos
 - **Email**: SMTP
 - **Media Storage**: Cloudinary
 - **Validation**: Pydantic
+- **Real-time**: Socket.IO (python-socketio)
 
 ## Installation
 
@@ -108,10 +111,12 @@ alembic upgrade head
 
 6. **Run the application**
 ```bash
-uvicorn app.main:app --reload
+# IMPORTANT: Use socket_app instead of app to enable Socket.IO
+uvicorn app.main:socket_app --reload --host 0.0.0.0 --port 8000
 ```
 
 The API will be available at `http://localhost:8000`
+Socket.IO will be available at `ws://localhost:8000/socket.io/`
 
 ## API Documentation
 
@@ -294,6 +299,72 @@ social-media-backend/
 - User verification checks on all protected routes
 - Authorization checks (users can only modify their own content)
 - SQL injection protection via SQLAlchemy ORM
+
+## Real-Time Notifications with Socket.IO
+
+This backend includes Socket.IO integration for real-time notifications. Users receive instant updates when:
+- Someone follows them
+- Someone likes their post
+- Someone comments on their post
+
+### Quick Start
+
+#### Server
+The Socket.IO server is automatically started when running the application with `socket_app`:
+```bash
+uvicorn app.main:socket_app --reload --host 0.0.0.0 --port 8000
+```
+
+#### Client Connection (JavaScript/React)
+```javascript
+import io from 'socket.io-client';
+
+const token = localStorage.getItem('access_token');
+const socket = io('http://localhost:8000', {
+  path: '/socket.io/',
+  query: { token },
+  transports: ['websocket', 'polling']
+});
+
+socket.on('connected', (data) => {
+  console.log('Connected:', data.message);
+});
+
+socket.on('new_notification', (notification) => {
+  console.log('New notification:', notification);
+  // Update UI with notification
+});
+```
+
+#### Check Connection Status
+```bash
+curl http://localhost:8000/socket/status
+```
+
+### Notification Format
+```json
+{
+  "id": 123,
+  "type": "like",
+  "actor_username": "john_doe",
+  "actor_id": 45,
+  "post_id": 789,
+  "is_read": false,
+  "created_at": "2026-01-23T10:30:00",
+  "message": "john_doe liked your post"
+}
+```
+
+### Features
+- ✅ JWT-based authentication for WebSocket connections
+- ✅ Automatic reconnection handling
+- ✅ User session management
+- ✅ Real-time notification delivery
+- ✅ Fallback to database polling for offline users
+- ✅ CORS support for web clients
+
+### Documentation
+For detailed Socket.IO implementation, client examples, and troubleshooting, see [SOCKETIO_DOCUMENTATION.md](SOCKETIO_DOCUMENTATION.md)
 
 ## Development
 

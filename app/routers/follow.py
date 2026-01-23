@@ -43,14 +43,14 @@ def follow_user(
     db.add(follow)
     db.commit()
 
-    # Create notification for the followed user
-    notification = Notification(
+    # Create notification for the followed user and emit via Socket.IO
+    from app.core.notification_helper import create_and_emit_notification_sync
+    create_and_emit_notification_sync(
+        db=db,
         user_id=user_id,
         actor_id=current_user.id,
-        type=NotificationType.FOLLOW
+        notification_type=NotificationType.FOLLOW
     )
-    db.add(notification)
-    db.commit()
 
     return {"message": "User followed successfully"}
 

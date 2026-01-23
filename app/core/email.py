@@ -26,7 +26,7 @@ Do not share this code with anyone.
 def send_password_reset_email(to_email: str, reset_token: str):
     """Send password reset email with reset link"""
     # Construct reset link - update with your frontend URL
-    reset_link = f"http://localhost:3000/reset-password?token={reset_token}"
+    reset_link = f"http://localhost:5173/reset-password?token={reset_token}"
     
     msg = EmailMessage()
     msg["Subject"] = "Reset Your Password"
